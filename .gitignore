@@ -1,0 +1,9 @@
+# CMake
+build
+
+# clangd
+.cache
+
+# MacOS
+.DS_Store
+
