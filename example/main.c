@@ -2,12 +2,12 @@
 
 int main(void)
 {
-  const olog_config_t config = {
-    .file_path = "logs.txt",
+  const olog_conf_t conf = {
+    .log_file_path = "logs.txt",
     .level = OLOG_LEVEL_TRACE,
   };
 
-  olog_init(&config);
+  olog_init(&conf);
 
   olog_trace("trace message");
   olog_debug("debug message");

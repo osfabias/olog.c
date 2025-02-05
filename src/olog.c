@@ -2,15 +2,16 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <time.h>
 
 #include "olog.h"
 
-static void write_timestamp(const char *format, FILE *file);
-static inline void write_entry_to_console(
+static void __olog_write_current_time(const char *format, FILE *file);
+
+static inline void __olog_write_entry_to_console(
   const olog_entry_t *entry, va_list args);
-static inline void write_entry_to_file(
+
+static inline void __olog_write_entry_to_log_file(
   const olog_entry_t *entry, va_list args);
 
 static struct {
@@ -21,12 +22,12 @@ static struct {
   .muted = false,
 };
 
-int olog_init(const olog_config_t *config)
+int olog_init(const olog_conf_t *conf)
 {
-  s_olog_state.log_file = fopen(config->file_path, "a");
+  s_olog_state.log_file = fopen(conf->log_file_path, "a");
   if (s_olog_state.log_file == NULL) { return 1; }
 
-  s_olog_state.level = config->level;
+  s_olog_state.level = conf->level;
 
   return 0;
 }
@@ -51,16 +52,20 @@ void olog_vlog(const olog_entry_t *entry, va_list args)
 {
   if (s_olog_state.muted || entry->level < s_olog_state.level) { return; }
 
-  write_entry_to_console(entry, args);
+  __olog_write_entry_to_console(entry, args);
 
-  if (s_olog_state.log_file) { write_entry_to_file(entry, args); }
+  if (s_olog_state.log_file)
+  {
+    __olog_write_entry_to_log_file(entry, args);
+  }
 }
 
-void write_entry_to_console(const olog_entry_t *entry, va_list args)
+void __olog_write_entry_to_console(const olog_entry_t *entry, va_list args)
 {
-  static const char *info_format = "\033[2;3;37m%s(%s:%d)\033[0m\n";
+  static const char *s_sender_info_format =
+    "\033[2;3;37m%s(%s:%d)\033[0m\n";
 
-  static const char *level_prefixes[OLOG_LEVEL_COUNT] = {
+  static const char *s_level_prefixes[OLOG_LEVEL_COUNT] = {
     "\033[1;37mtrace\033[0m: \033[3;37m",
     "\033[1;34mdebug\033[0m: \033[3;37m",
     "\033[1;32minfo\033[0m: ",
@@ -69,22 +74,25 @@ void write_entry_to_console(const olog_entry_t *entry, va_list args)
     "\007\033[1;41;97m fatal \033[0m: ",
   };
 
-  printf(info_format,
-    entry->file_path,
-    entry->function_name,
-    entry->line_number);
+  static const char *s_timestamp_format = "\033[37;2m[%H:%M:%S]\033[0m ";
 
-  write_timestamp("\033[37;2m[%H:%M:%S]\033[0m ", stdout);
-  fputs(level_prefixes[entry->level], stdout);
+  printf(s_sender_info_format,
+    entry->sender_file_path,
+    entry->sender_function_name,
+    entry->sender_line_number);
+
+  __olog_write_current_time(s_timestamp_format, stdout);
+  fputs(s_level_prefixes[entry->level], stdout);
   vprintf(entry->message_format, args);
   fputs("\n\n", stdout);
 }
 
-void write_entry_to_file(const olog_entry_t *entry, va_list args)
+void __olog_write_entry_to_log_file(
+  const olog_entry_t *entry, va_list args)
 {
-  static const char *info_format = "%s(%s:%d)\n";
+  static const char *s_sender_info_format = "%s(%s:%d)\n";
 
-  static const char *level_prefixes[OLOG_LEVEL_COUNT] = {
+  static const char *s_level_prefixes[OLOG_LEVEL_COUNT] = {
     "trace: ",
     "debug: ",
     "info:  ",
@@ -93,23 +101,25 @@ void write_entry_to_file(const olog_entry_t *entry, va_list args)
     "fatal: ",
   };
 
-  fprintf(s_olog_state.log_file,
-    info_format,
-    entry->file_path,
-    entry->function_name,
-    entry->line_number);
+  static const char *s_timestamp_format = "[%d.%m.%Y %H:%M:%S] ";
 
-  write_timestamp("[%d.%m.%Y %H:%M:%S] ", s_olog_state.log_file);
-  fputs(level_prefixes[entry->level], s_olog_state.log_file);
+  fprintf(s_olog_state.log_file,
+    s_sender_info_format,
+    entry->sender_file_path,
+    entry->sender_function_name,
+    entry->sender_line_number);
+
+  __olog_write_current_time(s_timestamp_format, s_olog_state.log_file);
+  fputs(s_level_prefixes[entry->level], s_olog_state.log_file);
   vfprintf(s_olog_state.log_file, entry->message_format, args);
   fputs("\n", s_olog_state.log_file);
 }
 
-void write_timestamp(const char *format, FILE *file)
+void __olog_write_current_time(const char *format, FILE *file)
 {
-  static char timebuf[64];
-  time_t t = time(NULL);
-  struct tm *tm = localtime(&t);
-  strftime(timebuf, sizeof(timebuf) / sizeof(timebuf[0]), format, tm);
-  fputs(timebuf, file);
+  static char strbuf[64];
+  time_t current_time = time(NULL);
+  struct tm *timestamp = localtime(&current_time);
+  strftime(strbuf, sizeof(strbuf) / sizeof(strbuf[0]), format, timestamp);
+  fputs(strbuf, file);
 }
